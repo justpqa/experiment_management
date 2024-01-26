@@ -1,0 +1,21 @@
+.box {
+    width: 50%;
+    border: 2px solid black; /* Set a black border */
+    border-radius: 10px; /* Set the border-radius for rounded corners */
+    padding: 10px; /* Set padding to create space between content and border */
+}
+
+.alert {
+    color: red;
+}
+
+.cancel {
+    border: none;
+    text-align:center;
+    vertical-align:center;
+}
+
+/* Style for the dropdown content (initially hidden) */
+.user-guide {
+    display: none;
+}

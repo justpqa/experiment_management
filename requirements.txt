@@ -1,0 +1,5 @@
+torch
+torchvision
+Flask
+Flask-SocketIO
+scikit-learn

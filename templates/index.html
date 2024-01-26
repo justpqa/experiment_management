@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Experiment Management System</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.1.2/socket.io.js"></script>
+    <script src="{{ url_for('static', filename='js/scripts.js') }}"></script>
+</head>
+<body>
+    <h1>Experiment Management System</h1>
+    
+    {% with messages = get_flashed_messages() %}
+        {% if messages %}
+            <div class="alert">
+                <p>There are some errors in the input section: </p>
+                <ul>
+                    {% for message in messages %}
+                    <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        {% endif %}
+    {% endwith %}
+
+    <div class="box" onclick="toggleDropdown()">
+        <div>
+            <h3 id="userGuideHeader">Click here to for how to use: </h3>
+        </div>
+
+        <div class="user-guide" id="userGuide">
+            <ul>
+                <li>For every parameters, you can enter it as a number of a list of numbers separated by comma.</li>
+                <li>For the hidden layer dimension, you should enter as a number or a list of comma separated number to represent dimensions of each hidden layers (128, 128, ...)</li>
+                <li>For the dropout rates, you can enter as None for no dropout rate, a single number for a unique dropout rates for all hidden layers, or a list of rates for each hidden layer </li>
+                <li>For other parameter (learning rate, number of epochs, batch size), you can enter them as a single number for training, or enter as a list if you want to perform grid searching.</li>
+                <li>You can also perform cross validation by entering number of folds into this. Note that for if you perform grid searching, there will be 2 results of actual testing and cross-validation score.</li>
+            </ul>
+        </div>
+    </div>
+    
+    <h2>Enter the parameters that you want to use in the model here:</h2>
+    <form method="post" action="{{ url_for('run_experiment') }}">
+        <label for="hidden_layers_dim">Dimension of hidden layers: </label>
+        <input type="text" name="hidden_layers_dim" value="{{ initial_params['hidden_layers_dim'] }}" required>
+        <br>
+
+        <label for="dropout_rate">Dropout rates: </label>
+        <input type="text" name="dropout_rate" value="{{ initial_params['dropout_rate'] }}" required>
+        <br>
+
+        <label for="optimizer">Optimizer: </label>
+        <select name="optimizer">
+            <option value="Adam" selected>Adam</option>
+            <option value="RMSprop">RMSprop</option>
+            <option value="Rprop">Rprop</option>
+            <option value="SGD">SGD</option>
+        </select>
+        <br>
+
+        <label for="learning_rate">Learning Rate:</label>
+        <input type="text" name="learning_rate" value="{{ initial_params['learning_rate'] }}" required>
+        <br>
+
+        <label for="batch_size">Batch Size:</label>
+        <input type="text" name="batch_size" value="{{ initial_params['batch_size'] }}" required>
+        <br>
+
+        <label for="num_epochs">Number of epochs:</label>
+        <input type="text" name="num_epochs" value="{{ initial_params['num_epochs'] }}" required>
+        <br>
+
+        <label for="num_folds">Number of folds for cross-validation:</label>
+        <input type="text" name="num_folds" value="{{ initial_params['num_folds'] }}" required>
+        <br>
+
+        <button type="submit">Run Experiment</button>
+    </form>
+
+    <h2>Running Experiments</h2>
+    <table border="1" id = "running_experiments">
+        <tr>
+            <th>Hidden layers</th>
+            <th>Dropout rate</th>
+            <th>Optimizer</th>
+            <th>Learning Rate</th>
+            <th>Batch Size</th>
+            <th>Number of epochs</th>
+            <th>Number of folds</th>
+            <th>Current Progress</th>
+            <th>Cancel experiment</th>
+        </tr>
+        {% for starting_time in running_experiments %}
+            <tr id = "{{starting_time}}">
+                <td>{{ running_experiments[starting_time]["params"]['hidden_layers_dim'] }}</td>
+                {% if running_experiments[starting_time]["params"]['dropout_rate'] == "None" %}
+                <td>{{ running_experiments[starting_time]["params"]['dropout_rate'] }}</td>
+                {% elif running_experiments[starting_time]["params"]['dropout_rate']|length == 1 %}
+                <td>{{ running_experiments[starting_time]["params"]['dropout_rate'][0] }}</td>
+                {% else %}
+                <td>{{ running_experiments[starting_time]["params"]['dropout_rate'] }}</td>
+                {% endif %}
+                <td>{{ running_experiments[starting_time]["params"]['optimizer'] }}</td>
+                <td>{{ running_experiments[starting_time]["params"]['learning_rate'] }}</td>
+                <td>{{ running_experiments[starting_time]["params"]['batch_size'] }}</td>
+                <td>{{ running_experiments[starting_time]["params"]['num_epochs'] }}</td>
+                <td>{{ running_experiments[starting_time]["params"]['num_folds'] }}</td>
+                {% if running_experiments[starting_time]["progress"] == "Final testing..." %}
+                <td id="experiment_{{starting_time}}">{{ running_experiments[starting_time]["progress"]}}</td>
+                {% else %}
+                <td id="experiment_{{starting_time}}">{{ running_experiments[starting_time]["progress"]}}%</td>
+                {% endif %}
+                <td class="cancel">
+                    <form method="post" action="{{ url_for('cancel_experiment', experiment_id=starting_time) }}">
+                        <button type="submit">Cancel</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+    </table>
+
+    <h2>Finished Experiments</h2>
+    <table border="1" id = "finished_experiments">
+        <tr>
+            <th>Hidden layers</th>
+            <th>Dropout rate</th>
+            <th>Optimizer</th>
+            <th>Learning Rate</th>
+            <th>Batch Size</th>
+            <th>Number of epochs</th>
+            <th>Best parameters combination</th>
+            <th>Cross-validation accuracy</th>
+            <th>Accuracy</th>
+        </tr>
+        {% for f in finished_experiments %}
+            <tr>
+                <td>{{ f.params["hidden_layers_dim"] }}</td>
+                {% if f.params['dropout_rate'] == "None" %}
+                <td>{{ f.params["dropout_rate"] }}</td>
+                {% elif f.params['dropout_rate']|length == 1 %}
+                <td>{{ f.params["dropout_rate"][0] }}</td>
+                {% else %}
+                <td>{{ f.params['dropout_rate'] }}</td>
+                {% endif %}
+                <td>{{ f.params['optimizer'] }}</td>
+                <td>{{ f.params['learning_rate'] }}</td>
+                <td>{{ f.params['batch_size'] }}</td>
+                <td>{{ f.params['num_epochs'] }}</td>
+                <td>{{ f.best_params.values()|list }}</td>
+                {% if f.cv_acc == "None" %}
+                <td>{{ f.cv_acc }}</td>
+                {% else %}
+                <td>{{ f.cv_acc }}%</td>
+                {% endif %}
+                <td>{{ -f.accuracy }}%</td>
+            </tr>
+        {% endfor %}
+    </table>
+</body>
+</html>
